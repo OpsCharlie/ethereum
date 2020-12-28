@@ -88,10 +88,10 @@ SendMail() {
 
 # Update TransactionPrice and Holdings in script
 SetHoldings() {
-    if [[ $1 -eq "buy" ]]; then
+    if [[ $1 == "buy" ]]; then
         sed -Ei "s/(^\s*TransactionPrice=).*/\1$Price/" "$Conf"
         sed -Ei "s/(^\s*Holdings=).*/\11/" "$Conf"
-    elif [[ $1 -eq "sell" ]]; then
+    elif [[ $1 == "sell" ]]; then
         sed -Ei "s/(^\s*TransactionPrice=).*/\1$Price/" "$Conf"
         sed -Ei "s/(^\s*Holdings=).*/\10/" "$Conf"
     fi
@@ -153,7 +153,7 @@ Main() {
 
 
 case "$1" in
-  buy | sell) Main;;
+  buy | sell) Main $1;;
   update)     Main;;
   test )      Init; SendMail;;
   info)       Init; Info;;
