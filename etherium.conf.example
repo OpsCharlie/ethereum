@@ -1,0 +1,8 @@
+TransactionPrice=100
+Holdings=1
+Difference=2
+LongDifference=10
+OldPriceFile=~/.etherium.OldPrice
+Email_From=ehterium@example.com
+Email_To=me@example.com
+Email_Server=smtp.server.com

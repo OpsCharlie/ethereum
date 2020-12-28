@@ -1,0 +1,162 @@
+#!/bin/bash
+#===============================================================================
+#
+#          FILE: etherium
+#
+#         USAGE: ./etherium [sell|buy|update|info|test]
+#
+#   DESCRIPTION: If ther are holdings, notify if diffecence between previous check is -2%
+#                                             or
+#                If ther are no holdings, notify if diffecence between previous check is +2%
+#                                                or
+#                                                if the difference is +10% of TransactionPrice
+#
+#  REQUIREMENTS: https://github.com/pixelb/scripts/blob/master/scripts/ansi2html.sh
+#
+#       OPTIONS: buy = I bought holdings
+#                sell = I sold holdings
+#                update = update oldprice
+#                test = send testmail
+#                info = show info
+#
+#        AUTHOR: OpsCharlie
+#  ORGANIZATION:
+#       CREATED: 09-03-20 12:09:11
+#      REVISION:  ---
+#===============================================================================
+
+
+Usage() {
+    cat <<EOF
+    Usage: $0 [sell|buy|update|info|test]
+
+        buy = I bought holdings
+        sell = I sold holdings
+        update = update oldprice
+        test = send testmail
+        info = show info
+EOF
+}
+
+
+GetPrice() {
+    curl -s eur.rate.sx/1eth
+}
+
+
+GetPercent() {
+    NewPrice="$1"
+    echo "scale=10; ( 100 / $NewPrice * $Price ) - 100" | bc
+}
+
+
+Info() {
+    echo "Old Price = $OldPrice ($(stat -c %y $OldPriceFile))"
+    echo "New Price = $Price"
+    echo "Difference= $Percent %"
+    echo ""
+    echo "Holdings Price = $TransactionPrice"
+    echo "Difference     = $(GetPercent $TransactionPrice) %"
+    echo
+    curl -s "eur.rate.sx/?q" | grep -E 'ETH|Rank' | grep -v "NEW FEATURE"
+    echo
+    curl -s "eur.rate.sx/eth@4h"
+}
+
+
+SendMail() {
+    Subject=${1:-nomessage}
+    (
+        echo '<html>'
+        echo '<body>'
+        echo '<pre style="font: monospace">'
+        echo "Old Price = $OldPrice"
+        echo "New Price = $Price"
+        echo "Difference= $Percent"
+        echo ''
+        echo "Holdings Price = $TransactionPrice"
+        echo "Difference     = $(GetPercent $TransactionPrice)"
+        curl -s "eur.rate.sx" | grep -E 'ETH|Rank' | grep -v 'NEW FEATURE' | /usr/local/bin/ansi2html.sh
+        curl -s "eur.rate.sx/eth@4h" | /usr/local/bin/ansi2html.sh
+        echo '</pre>'
+        echo '</body>'
+        echo '</html>'
+        echo ''
+    ) | sendemail -f "$Email_From" -t "$Email_To" -s "$Email_Server" -u "$Subject" -o "message-content-type=text/html"
+}
+
+
+# Update TransactionPrice and Holdings in script
+SetHoldings() {
+    if [[ $1 -eq "buy" ]]; then
+        sed -Ei "s/(^\s*TransactionPrice=).*/\1$Price/" "$Conf"
+        sed -Ei "s/(^\s*Holdings=).*/\11/" "$Conf"
+    elif [[ $1 -eq "sell" ]]; then
+        sed -Ei "s/(^\s*TransactionPrice=).*/\1$Price/" "$Conf"
+        sed -Ei "s/(^\s*Holdings=).*/\10/" "$Conf"
+    fi
+}
+
+
+Init() {
+    if [ -f ~/.etherium.conf ]; then
+        Conf=~/.etherium.conf
+        source $Conf
+    else
+        Conf="${BASH_SOURCE[0]}"
+        echo "~/.etherium.conf not found, using default"
+        TransactionPrice=100
+        Holdings=1
+        Difference=2
+        LongDifference=10
+        OldPriceFile=/tmp/OldPrice
+    fi
+
+    Price=$(GetPrice)
+    if [[ -f $OldPriceFile ]]; then
+        OldPrice=$(cat $OldPriceFile)
+    else
+        OldPrice="$Price"
+    fi
+    Percent=$(GetPercent "$OldPrice")
+}
+
+
+Main() {
+    Init
+    SetHoldings $1
+
+    echo "$Price" > "$OldPriceFile"
+
+    if [[ $Holdings -eq 1 ]]; then
+        if (( $(bc <<< "$Percent < 0") )); then
+            if (( $(bc <<< "$Percent < -$Difference") )); then
+                SendMail "Sell -$Difference"
+            fi
+        fi
+        LongPercent=$(GetPercent "$TransactionPrice")
+        if (( $(bc <<< "$LongPercent < 0") )); then
+            if (( $(bc <<< "$LongPercent < -$LongDifference") )); then
+                SendMail "Sell -$LongDifference"
+            fi
+        fi
+    else
+        if (( $(bc <<< "$Percent > $Difference") )); then
+            SendMail "Buy"
+        fi
+        LongPercent=$(GetPercent "$TransactionPrice")
+        if (( $(bc <<< "$LongPercent > $LongDifference") )); then
+            SendMail "Buy $LongDifference"
+        fi
+    fi
+}
+
+
+case "$1" in
+  buy | sell) Main;;
+  update)     Main;;
+  test )      Init; SendMail;;
+  info)       Init; Info;;
+  *)          Usage;;
+esac
+
