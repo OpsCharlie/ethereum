@@ -58,7 +58,7 @@ Info() {
     echo "Holdings Price = $TransactionPrice"
     echo "Difference     = $(GetPercent $TransactionPrice) %"
     echo
-    curl -s "eur.rate.sx/?q" | grep -E 'ETH|Rank' | grep -v "NEW FEATURE"
+    curl -s "eur.rate.sx" | grep -E 'ETH|Rank' | grep -v "NEW FEATURE"
     echo
     curl -s "eur.rate.sx/eth@4h"
 }
@@ -67,9 +67,8 @@ Info() {
 SendMail() {
     Subject=${1:-nomessage}
     (
-        echo '<html>'
-        echo '<body>'
-        echo '<pre style="font: monospace">'
+        echo '<body style="background-color:#000000;">'
+        echo '<pre style="font: monospace; color: white">'
         echo "Old Price = $OldPrice"
         echo "New Price = $Price"
         echo "Difference= $Percent"
@@ -80,9 +79,8 @@ SendMail() {
         curl -s "eur.rate.sx/eth@4h" | /usr/local/bin/ansi2html.sh
         echo '</pre>'
         echo '</body>'
-        echo '</html>'
-        echo ''
-    ) | sendemail -f "$Email_From" -t "$Email_To" -s "$Email_Server" -u "$Subject" -o "message-content-type=text/html"
+    ) | sendemail -f "$Email_From" -t "$Email_To" -s "$Email_Server" -u "$Subject" -o message-content-type=html -o message-charset=utf-8
+    wget https://panel.smspoint.ee/gateway/$SMS_API/api.v1/send?phone=$SMS_Phone\&sender=ETHERIUM\&when=\&message=$(echo $Subject | tr ' ' '+')\&output=json -O /tmp/wget.log
 }
 
 
