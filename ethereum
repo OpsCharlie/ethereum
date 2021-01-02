@@ -1,9 +1,9 @@
 #!/bin/bash
 #===============================================================================
 #
-#          FILE: etherium
+#          FILE: ethereum
 #
-#         USAGE: ./etherium [sell|buy|update|info|test]
+#         USAGE: ./ethereum [sell|buy|update|info|test]
 #
 #   DESCRIPTION: If ther are holdings, notify if diffecence between previous check is -2%
 #                                             or
@@ -81,7 +81,7 @@ SendMail() {
         echo '</body>'
     ) | sendemail -f "$Email_From" -t "$Email_To" -s "$Email_Server" -u "$Subject" -o message-content-type=html -o message-charset=utf-8
     if [[ ! -z $SMS_Phone ]]; then
-        wget https://panel.smspoint.ee/gateway/$SMS_API/api.v1/send?phone=$SMS_Phone\&sender=ETHERIUM\&when=\&message=$(echo $Subject | tr ' ' '+')\&output=json -O /tmp/wget.log
+        wget https://panel.smspoint.ee/gateway/$SMS_API/api.v1/send?phone=$SMS_Phone\&sender=ETHEREUM\&when=\&message=$(echo $Subject | tr ' ' '+')\&output=json -O /tmp/wget.log
     fi
 }
 
@@ -99,12 +99,12 @@ SetHoldings() {
 
 
 Init() {
-    if [ -f ~/.etherium.conf ]; then
-        Conf=~/.etherium.conf
+    if [ -f ~/.ethereum.conf ]; then
+        Conf=~/.ethereum.conf
         source $Conf
     else
         Conf="${BASH_SOURCE[0]}"
-        echo "~/.etherium.conf not found, using default"
+        echo "~/.ethereum.conf not found, using default"
         TransactionPrice=100
         Holdings=1
         Difference=2
