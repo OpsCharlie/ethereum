@@ -28,55 +28,101 @@
 
 Usage() {
     cat <<EOF
-    Usage: $0 [sell|buy|update|info|test]
-
-        buy = I bought holdings
-        sell = I sold holdings
-        update = update oldprice
-        test = send testmail
-        info = show info
+    Usage: $0 [sell|buy|update|info|test|price|balance]
+        buy      = Buy Asset
+        sell     = Sell Asset
+        update   = Bot will buy/sell
+        test     = Send test email
+        info     = Show info
+        price    = Show price of Asset
+        balance  = Show balance
 EOF
 }
 
 
+GetMACD() {
+    curl -s "https://api.taapi.io/macd?secret=${TaapiKey}&exchange=${Exchange}&symbol=${Asset}/${Quote}&interval=${Interval}" | jq .valueMACDHist
+    # echo $x
+}
+
+
 GetPrice() {
-    curl -s eur.rate.sx/1eth
+    curl -s "${BinanceUrl}/ticker/price?symbol=${Symbol}" | jq .price
 }
 
 
-GetPercent() {
-    NewPrice="$1"
-    echo "scale=10; ( 100 / $NewPrice * $Price ) - 100" | bc
+GetSignature() {
+    echo -n "$1" | openssl dgst -sha256 -hmac "${BinanceSecret}" | awk '{print $2}'
 }
+
+
+GetBalance() {
+    Request="timestamp=${Time}"
+    Signature="$(GetSignature ${Request})"
+    curl -s --location --request GET "${BinanceUrl}/account?${Request}&signature=${Signature}" \
+        --header "Content-Type: application/json" \
+        --header "X-MBX-APIKEY: ${BinanceKey}"
+}
+
+
+BuyBinance() {
+    QuoteQuantity=$(GetBalance| jq --arg QUOTE "${Quote}" '.balances[] | select (.asset==$QUOTE).free' | tr -d '"')
+    Request="symbol=${Symbol}&side=BUY&type=MARKET&quoteOrderQty=${QuoteQuantity}&timestamp=${Time}"
+    Signature="$(GetSignature ${Request})"
+    if [[ $Test -eq 0 ]]; then
+        curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
+            --header "Content-Type: application/json" \
+            --header "X-MBX-APIKEY: ${BinanceKey}"
+    else
+        echo "Dry Run!!!"
+        echo
+        echo "$Request" | tr '&' '\n'
+    fi
+}
+
+
+SellBinance() {
+    AssetQuantity=$(GetBalance| jq --arg QUOTE "${Asset}" '.balances[] | select (.asset==$QUOTE).free' | tr -d '"')
+    AssetQuantity=$(echo "scale=4; $AssetQuantity / 1" | bc)
+    Request="symbol=${Symbol}&side=SELL&type=MARKET&quantity=${AssetQuantity}&timestamp=${Time}"
+    Signature="$(GetSignature ${Request})"
+    if [[ $Test -eq 0 ]]; then
+        curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
+            --header "Content-Type: application/json" \
+            --header "X-MBX-APIKEY: ${BinanceKey}"
+    else
+        echo "Dry Run!!!"
+        echo
+        echo "$Request" | tr '&' '\n'
+    fi
+}
+
 
 
 Info() {
-    echo "Old Price = $OldPrice ($(stat -c %y $OldPriceFile))"
-    echo "New Price = $Price"
-    echo "Difference= $Percent %"
-    echo ""
-    echo "Holdings Price = $TransactionPrice"
-    echo "Difference     = $(GetPercent $TransactionPrice) %"
     echo
-    curl -s "eur.rate.sx" | grep -E 'ETH|Rank' | grep -v "NEW FEATURE"
+    curl -s "usdt.rate.sx" | grep -E 'ETH|Rank' | grep -v "NEW FEATURE"
     echo
-    curl -s "eur.rate.sx/eth@4h"
+    echo "Price = $(GetPrice)"
+    echo "MACD = $(GetMACD)"
+    echo
+    Balance=$(GetBalance)
+    echo "$Balance" | jq --arg ASSET "${Asset}" --arg QUOTE "${Quote}" '.balances[] | select (.asset==$ASSET or .asset==$QUOTE)'
+    echo
+    curl -s "usdt.rate.sx/eth@1h"
 }
 
 
 SendMail() {
     Subject=${1:-nomessage}
+    ExtraInfo=${2:-...}
     (
         echo '<body style="background-color:#000000;">'
         echo '<pre style="font: monospace; color: white">'
-        echo "Old Price = $OldPrice"
-        echo "New Price = $Price"
-        echo "Difference= $Percent"
-        echo ''
-        echo "Holdings Price = $TransactionPrice"
-        echo "Difference     = $(GetPercent $TransactionPrice)"
-        curl -s "eur.rate.sx" | grep -E 'ETH|Rank' | grep -v 'NEW FEATURE' | /usr/local/bin/ansi2html.sh
-        curl -s "eur.rate.sx/eth@4h" | /usr/local/bin/ansi2html.sh
+        {
+            echo "$Extrainfo"
+            Info
+        } | /usr/local/bin/ansi2html.sh
         echo '</pre>'
         echo '</body>'
     ) | sendemail -f "$Email_From" -t "$Email_To" -s "$Email_Server" -u "$Subject" -o message-content-type=html -o message-charset=utf-8
@@ -86,77 +132,97 @@ SendMail() {
 }
 
 
-# Update TransactionPrice and Holdings in script
-SetHoldings() {
-    if [[ $1 == "buy" ]]; then
-        sed -Ei "s/(^\s*TransactionPrice=).*/\1$Price/" "$Conf"
-        sed -Ei "s/(^\s*Holdings=).*/\11/" "$Conf"
-    elif [[ $1 == "sell" ]]; then
-        sed -Ei "s/(^\s*TransactionPrice=).*/\1$Price/" "$Conf"
-        sed -Ei "s/(^\s*Holdings=).*/\10/" "$Conf"
-    fi
-}
-
-
 Init() {
     if [ -f ~/.ethereum.conf ]; then
         Conf=~/.ethereum.conf
         source $Conf
+        source $PreviousValues
     else
-        Conf="${BASH_SOURCE[0]}"
-        echo "~/.ethereum.conf not found, using default"
-        TransactionPrice=100
-        Holdings=1
-        Difference=2
-        LongDifference=10
-        OldPriceFile=/tmp/OldPrice
+        echo "$HOME/.ethereum.conf not found"
+        exit 1
     fi
+    Time=$(date +%s%3N)
+    Symbol="$Asset$Quote"
+}
 
-    Price=$(GetPrice)
-    if [[ -f $OldPriceFile ]]; then
-        OldPrice=$(cat $OldPriceFile)
-    else
-        OldPrice="$Price"
+
+GetDirection() {
+    Diff=$(echo "$MACD - $PreviousMACD" | bc)
+    if [[ $(echo "$Diff > 0" | bc) -eq 1 ]]; then
+        echo "Ascending"
+    elif [[ $(echo "$Diff < 0" | bc) -eq 1 ]]; then
+        echo "Descending"
+    elif [[ $(echo "$Diff == 0" | bc) -eq 1 ]]; then
+        echo "Stable"
     fi
-    Percent=$(GetPercent "$OldPrice")
+}
+
+
+Replace() {
+    sed -i "s/$1.*/$1=$2/" $PreviousValues
+}
+
+
+GetBuySell() {
+    if [ -z $PreviousSide ]; then
+        PreviousSide="hold"
+    fi
+    if [[ $Direction == "Ascending" ]]; then
+        if [[ $(echo "$MACD >= $Buy" | bc) -eq 1 ]]; then
+            if [[ $PreviousSide != "buy" ]]; then
+                Side="buy"
+                Replace PreviousSide "$Side"
+                echo $Side
+            fi
+        fi
+    elif [[ $Direction == "Descending" ]]; then
+        if [[ $(echo "$MACD <= $Sell" | bc) -eq 1 ]]; then
+            if [[ $PreviousSide != "sell" ]]; then
+                Side="sell"
+                Replace PreviousSide "$Side"
+                echo $Side
+            fi
+        fi
+    fi
 }
 
 
 Main() {
     Init
-    SetHoldings $1
-
-    echo "$Price" > "$OldPriceFile"
-
-    if [[ $Holdings -eq 1 ]]; then
-        if (( $(bc <<< "$Percent < 0") )); then
-            if (( $(bc <<< "$Percent < -$Difference") )); then
-                SendMail "Sell -$Difference"
-            fi
-        fi
-        LongPercent=$(GetPercent "$TransactionPrice")
-        if (( $(bc <<< "$LongPercent < 0") )); then
-            if (( $(bc <<< "$LongPercent < -$LongDifference") )); then
-                SendMail "Sell -$LongDifference"
-            fi
-        fi
-    else
-        if (( $(bc <<< "$Percent > $Difference") )); then
-            SendMail "Buy"
-        fi
-        LongPercent=$(GetPercent "$TransactionPrice")
-        if (( $(bc <<< "$LongPercent > $LongDifference") )); then
-            SendMail "Buy $LongDifference"
-        fi
+    MACD=$(GetMACD)
+    if [ -z $PreviousMACD ]; then
+        PreviousMACD=$MACD
+    fi
+    Replace PreviousMACD "$MACD"
+    Direction=$(GetDirection)
+    if [ -z $PreviousDirection ]; then
+        PreviousDirection=$Direction
+    fi
+    Replace PreviousDirection "$Direction"
+    BuySell=$(GetBuySell)
+    if [[ $BuySell == "buy" ]]; then
+        echo "Buying"
+        Result=$(BuyBinance | jq)
+        SendMail "Crypto-signal buy alert!" "$Result"
+    elif [[ $BuySell == "sell" ]]; then
+        echo "Selling"
+        Result=$(SellBinance | jq)
+        SendMail "Crypto-signal cold alert!" "$Result"
     fi
 }
 
 
 case "$1" in
-  buy | sell) Main $1;;
+  buy)        Init; BuyBinance;;
+  sell)       Init; SellBinance;;
   update)     Main;;
-  test )      Init; SendMail;;
+  test )      Init; SendMail "Crypto-signal test alert!";;
   info)       Init; Info;;
+  price)      Init; GetPrice;;
+  balance)    Init;
+              Balance=$(GetBalance)
+              echo "$Balance" | jq --arg ASSET "${Asset}" --arg QUOTE "${Quote}" '.balances[] | select (.asset==$ASSET or .asset==$QUOTE)'
+              ;;
   *)          Usage;;
 esac
 
