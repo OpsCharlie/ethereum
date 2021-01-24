@@ -57,6 +57,7 @@ GetSignature() {
 
 
 GetBalance() {
+    Time=$(date +%s%3N)
     Request="timestamp=${Time}"
     Signature="$(GetSignature ${Request})"
     curl -s --location --request GET "${BinanceUrl}/account?${Request}&signature=${Signature}" \
@@ -67,6 +68,7 @@ GetBalance() {
 
 BuyBinance() {
     QuoteQuantity=$(GetBalance| jq --arg QUOTE "${Quote}" '.balances[] | select (.asset==$QUOTE).free' | tr -d '"')
+    Time=$(date +%s%3N)
     Request="symbol=${Symbol}&side=BUY&type=MARKET&quoteOrderQty=${QuoteQuantity}&timestamp=${Time}"
     Signature="$(GetSignature ${Request})"
     if [[ $Test -eq 0 ]]; then
@@ -74,9 +76,12 @@ BuyBinance() {
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
     else
-        echo "Dry Run!!!"
-        echo
-        echo "$Request" | tr '&' '\n'
+        # echo "Dry Run!!!"
+        # echo
+        # echo "$Request" | tr '&' '\n'
+        curl -s --location --request POST "${BinanceUrl}/order/test?${Request}&signature=${Signature}" \
+            --header "Content-Type: application/json" \
+            --header "X-MBX-APIKEY: ${BinanceKey}"
     fi
 }
 
@@ -84,6 +89,7 @@ BuyBinance() {
 SellBinance() {
     AssetQuantity=$(GetBalance| jq --arg QUOTE "${Asset}" '.balances[] | select (.asset==$QUOTE).free' | tr -d '"')
     AssetQuantity=$(echo "scale=4; $AssetQuantity / 1" | bc)
+    Time=$(date +%s%3N)
     Request="symbol=${Symbol}&side=SELL&type=MARKET&quantity=${AssetQuantity}&timestamp=${Time}"
     Signature="$(GetSignature ${Request})"
     if [[ $Test -eq 0 ]]; then
@@ -91,9 +97,12 @@ SellBinance() {
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
     else
-        echo "Dry Run!!!"
-        echo
-        echo "$Request" | tr '&' '\n'
+        # echo "Dry Run!!!"
+        # echo
+        # echo "$Request" | tr '&' '\n'
+        curl -s --location --request POST "${BinanceUrl}/order/test?${Request}&signature=${Signature}" \
+            --header "Content-Type: application/json" \
+            --header "X-MBX-APIKEY: ${BinanceKey}"
     fi
 }
 
@@ -115,6 +124,9 @@ Info() {
 
 SendMail() {
     Subject=${1:-nomessage}
+    if [[ $Test -eq 1 ]]; then
+        Subject+=" TEST"
+    fi
     ExtraInfo=${2:-...}
     (
         echo '<body style="background-color:#000000;">'
@@ -201,6 +213,7 @@ Main() {
     Replace PreviousDirection "$Direction"
     BuySell=$(GetBuySell)
     if [[ $Test -eq 1 ]]; then
+        echo "TEST"
         cat $PreviousValues
         echo
         echo "BuySell = $BuySell"
