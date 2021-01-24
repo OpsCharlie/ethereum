@@ -200,6 +200,11 @@ Main() {
     fi
     Replace PreviousDirection "$Direction"
     BuySell=$(GetBuySell)
+    if [[ $Test -eq 1 ]]; then
+        cat $PreviousValues
+        echo
+        echo "BuySell = $BuySell"
+    fi
     if [[ $BuySell == "buy" ]]; then
         echo "Buying"
         Result=$(BuyBinance | jq)
