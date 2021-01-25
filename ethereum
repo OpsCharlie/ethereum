@@ -79,7 +79,7 @@ BuyBinance() {
         curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
-        Replace LastTransaction "$Time - BUY - $Price"
+        Replace LastTransaction "$(date) - BUY - $Price"
     else
         # echo "Dry Run!!!"
         # echo
@@ -101,7 +101,7 @@ SellBinance() {
         curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
-        Replace LastTransaction "$Time - SELL - $Price"
+        Replace LastTransaction "$(date) - SELL - $Price"
     else
         # echo "Dry Run!!!"
         # echo
