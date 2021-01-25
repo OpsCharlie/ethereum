@@ -41,7 +41,7 @@ EOF
 
 
 GetMACD() {
-    JqResult=$(curl -s "https://api.taapi.io/macd?secret=${TaapiKey}&exchange=${Exchange}&symbol=${Asset}${Quote}&interval=${Interval}" | jq .valueMACDHist)
+    JqResult=$(curl -s "https://api.taapi.io/macd?secret=${TaapiKey}&exchange=${Exchange}&symbol=${Asset}/${Quote}&interval=${Interval}" | jq .valueMACDHist)
     if [[ $JqResult == null ]]; then
         exit 1
     fi
