@@ -41,7 +41,11 @@ EOF
 
 
 GetMACD() {
-    curl -s "https://api.taapi.io/macd?secret=${TaapiKey}&exchange=${Exchange}&symbol=${Asset}/${Quote}&interval=${Interval}" | jq .valueMACDHist
+    JqResult=$(curl -s "https://api.taapi.io/macd?secret=${TaapiKey}&exchange=${Exchange}&symbol=${Asset}${Quote}&interval=${Interval}" | jq .valueMACDHist)
+    if [[ $JqResult == null ]]; then
+        exit 1
+    fi
+    echo "$JqResult"
     # echo $x
 }
 
@@ -171,7 +175,7 @@ GetDirection() {
 
 
 Replace() {
-    sed -i "s/$1.*/$1=$2/" $PreviousValues
+    sed -i "s/^$1.*/$1=$2/" $PreviousValues
 }
 
 
@@ -202,10 +206,20 @@ GetBuySell() {
 Main() {
     Init
     MACD=$(GetMACD)
+    if [[ $? -ne 0 ]]; then
+        SendMail "Crypto-signal MACD alert!" "Error fetching MACD"
+        exit 1
+    fi
+    Replace PreviousDate "$(date)"
     if [ -z $PreviousMACD ]; then
         PreviousMACD=$MACD
     fi
     Replace PreviousMACD "$MACD"
+    Price="$(GetPrice)"
+    if [ -z $PreviousPrice ]; then
+        PreviousPrice=$Price
+    fi
+    Replace PreviousPrice "$Price"
     Direction=$(GetDirection)
     if [ -z $PreviousDirection ]; then
         PreviousDirection=$Direction
@@ -219,13 +233,13 @@ Main() {
         echo "BuySell = $BuySell"
     fi
     if [[ $BuySell == "buy" ]]; then
-        echo "Buying"
-        Result=$(BuyBinance | jq)
+        echo "Buying $Price"
+        Result=$(BuyBinance)
         SendMail "Crypto-signal buy alert!" "$Result"
     elif [[ $BuySell == "sell" ]]; then
-        echo "Selling"
-        Result=$(SellBinance | jq)
-        SendMail "Crypto-signal cold alert!" "$Result"
+        echo "Selling $Price"
+        Result=$(SellBinance)
+        SendMail "Crypto-signal sell alert!" "$Result"
     fi
 }
 
