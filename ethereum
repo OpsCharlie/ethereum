@@ -79,7 +79,7 @@ BuyBinance() {
         curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
-        Replace LastTransaction "$(date) - BUY - $Price"
+        Replace LastTransaction "\"$(date) - BUY - $Price\""
     else
         # echo "Dry Run!!!"
         # echo
@@ -101,7 +101,7 @@ SellBinance() {
         curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
-        Replace LastTransaction "$(date) - SELL - $Price"
+        Replace LastTransaction "\"$(date) - SELL - $Price\""
     else
         # echo "Dry Run!!!"
         # echo
@@ -212,7 +212,7 @@ Main() {
         SendMail "Crypto-signal MACD alert!" "Error fetching MACD"
         exit 1
     fi
-    Replace PreviousDate "$(date)"
+    Replace PreviousDate "\"$(date)\""
     if [ -z $PreviousMACD ]; then
         PreviousMACD=$MACD
     fi
@@ -247,8 +247,12 @@ Main() {
 
 
 case "$1" in
-  buy)        Init; BuyBinance;;
-  sell)       Init; SellBinance;;
+  buy)        Init
+              Price="$(GetPrice)"
+              BuyBinance;;
+  sell)       Init
+              Price="$(GetPrice)"
+              SellBinance;;
   update)     Main;;
   test )      Init; SendMail "Crypto-signal test alert!";;
   info)       Init; Info;;
