@@ -265,12 +265,12 @@ Main() {
     fi
     Replace PreviousDirection "$Direction"
     BuySell=$(GetBuySell)
+    echo "$Price,$MACD,$BuySell" >> $Log
     if [[ $Test -eq 1 ]]; then
         echo "TEST"
         cat $PreviousValues
         echo
         echo "BuySell = $BuySell"
-        echo "$Price,$MACD,$BuySell" >> $Log
     fi
     if [[ $BuySell == "buy" ]]; then
         echo "Buying $Price"
