@@ -79,7 +79,7 @@ BuyBinance() {
         curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
-        Replace LastTransaction "$(date) - BUY - $Price"
+        Replace LastTransaction "\"$(date) - BUY - $Price\""
     else
         # echo "Dry Run!!!"
         # echo
@@ -87,6 +87,7 @@ BuyBinance() {
         curl -s --location --request POST "${BinanceUrl}/order/test?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
+        Replace LastTransaction "\"$(date) - BUY - TEST - $Price\""
     fi
 }
 
@@ -101,7 +102,7 @@ SellBinance() {
         curl -s --location --request POST "${BinanceUrl}/order?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
-        Replace LastTransaction "$(date) - SELL - $Price"
+        Replace LastTransaction "\"$(date) - SELL - $Price\""
     else
         # echo "Dry Run!!!"
         # echo
@@ -109,6 +110,7 @@ SellBinance() {
         curl -s --location --request POST "${BinanceUrl}/order/test?${Request}&signature=${Signature}" \
             --header "Content-Type: application/json" \
             --header "X-MBX-APIKEY: ${BinanceKey}"
+        Replace LastTransaction "\"$(date) - SELL - TEST - $Price\""
     fi
 }
 
@@ -151,6 +153,7 @@ SendMail() {
 
 
 Init() {
+    Trigger=0
     if [ -f ~/.ethereum.conf ]; then
         Conf=~/.ethereum.conf
         source $Conf
@@ -185,34 +188,54 @@ GetBuySell() {
     if [ -z $PreviousSide ]; then
         PreviousSide="hold"
     fi
-    if [[ $Direction == "Ascending" ]]; then
-        if [[ $(echo "$MACD >= $Buy" | bc) -eq 1 ]]; then
-            if [[ $PreviousSide != "buy" ]]; then
-                Side="buy"
-                Replace PreviousSide "$Side"
-                echo $Side
-            fi
+
+    # MACD is not between the triggers
+    if ! [[ $(echo "$MACD <= $SellTrigger && $MACD >= $BuyTrigger" | bc) -eq 1 ]]; then
+        Trigger=0
+    fi
+
+    if [[ $Direction == Ascending ]]; then
+        if [[ $(echo "$MACD >= $BuyTrigger && $Trigger == 0" | bc) -eq 1 ]]; then
+            Trigger=$BuyTrigger
         fi
-    elif [[ $Direction == "Descending" ]]; then
-        if [[ $(echo "$MACD <= $Sell" | bc) -eq 1 ]]; then
-            if [[ $PreviousSide != "sell" ]]; then
-                Side="sell"
-                Replace PreviousSide "$Side"
+        if [[ $(echo "$MACD >= $Buy && $BuyTrigger >= $Trigger" | bc) -eq 1 ]]; then
+            Side="buy"
+            Trigger=$MACD
+            if [[ $PreviousSide != "buy" ]]; then
                 echo $Side
             fi
+            Replace PreviousSide "$Side"
+        fi
+    elif [[ $Direction == Descending ]]; then
+        if [[ $(echo "$MACD <= $SellTrigger && $Trigger == 0" | bc) -eq 1 ]]; then
+            Trigger=$SellTrigger
+        fi
+        if [[ $(echo "$MACD <= $Sell && $SellTrigger <= $Trigger" | bc) -eq 1 ]]; then
+            Side="sell"
+            Trigger=$MACD
+            Side="sell"
+            if [[ $PreviousSide != "sell" ]]; then
+                echo $Side
+            fi
+            Replace PreviousSide "$Side"
         fi
     fi
+    Replace Trigger "$Trigger"
 }
 
 
 Main() {
     Init
-    MACD=$(GetMACD)
+    if [[ -z $1 ]]; then
+        MACD=$(GetMACD)
+    else
+        MACD=$1
+    fi
     if [[ $? -ne 0 ]]; then
         SendMail "Crypto-signal MACD alert!" "Error fetching MACD"
         exit 1
     fi
-    Replace PreviousDate "$(date)"
+    Replace PreviousDate "\"$(date)\""
     if [ -z $PreviousMACD ]; then
         PreviousMACD=$MACD
     fi
@@ -233,6 +256,7 @@ Main() {
         cat $PreviousValues
         echo
         echo "BuySell = $BuySell"
+        echo "$Price,$MACD,$BuySell" >> $Log
     fi
     if [[ $BuySell == "buy" ]]; then
         echo "Buying $Price"
@@ -247,9 +271,13 @@ Main() {
 
 
 case "$1" in
-  buy)        Init; BuyBinance;;
-  sell)       Init; SellBinance;;
-  update)     Main;;
+  buy)        Init
+              Price="$(GetPrice)"
+              BuyBinance;;
+  sell)       Init
+              Price="$(GetPrice)"
+              SellBinance;;
+  update)     Main $2;;
   test )      Init; SendMail "Crypto-signal test alert!";;
   info)       Init; Info;;
   price)      Init; GetPrice;;
