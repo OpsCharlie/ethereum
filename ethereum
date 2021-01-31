@@ -275,11 +275,11 @@ Main() {
     if [[ $BuySell == "buy" ]]; then
         echo "Buying $Price"
         Result=$(BuyBinance)
-        SendMail "Crypto-signal buy alert!" "$Result"
+        SendMail "Crypto-signal buy ${Asset} alert!" "$Result"
     elif [[ $BuySell == "sell" ]]; then
         echo "Selling $Price"
         Result=$(SellBinance)
-        SendMail "Crypto-signal sell alert!" "$Result"
+        SendMail "Crypto-signal sell ${Asset} alert!" "$Result"
     fi
 }
 
