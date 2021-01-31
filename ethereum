@@ -152,6 +152,20 @@ SendMail() {
 }
 
 
+Reset() {
+    cat << EOF > ~/.${0}.Previous
+PreviousDate=""
+PreviousDirection=
+PreviousPrice=
+PreviousMACD=
+PreviousSide=
+Trigger=0
+
+LastTransaction=""
+EOF
+}
+
+
 Init() {
     Trigger=0
     if [ -f ~/.${0}.conf ]; then
@@ -285,6 +299,7 @@ case "$1" in
               Balance=$(GetBalance)
               echo "$Balance" | jq --arg ASSET "${Asset}" --arg QUOTE "${Quote}" '.balances[] | select (.asset==$ASSET or .asset==$QUOTE)'
               ;;
+  reset)      Reset;;
   *)          Usage;;
 esac
 
