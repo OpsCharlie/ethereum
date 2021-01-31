@@ -2,6 +2,7 @@ PreviousValues=~/.ethereum.Previous
 Email_From=me@example.com
 Email_To=me@example.com
 Email_Server=smtp.example.com
+Log=/tmp/ethereum.csv
 
 
 TaapiKey="abc"
@@ -9,8 +10,10 @@ Exchange="binance"
 Interval="1h"
 
 Test=1
-Buy=-0.1
-Sell=0.1
+BuyTrigger=-1
+Buy=-0.5
+SellTrigger=1
+Sell=0.5
 
 BinanceUrl="https://api.binance.com/api/v3"
 BinanceKey="xyz"
