@@ -51,7 +51,7 @@ GetMACD() {
 
 
 GetPrice() {
-    curl -s "${BinanceUrl}/ticker/price?symbol=${Symbol}" | jq .price
+    curl -s "${BinanceUrl}/ticker/price?symbol=${Symbol}" | jq .price | tr -d '"'
 }
 
 
