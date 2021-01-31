@@ -28,7 +28,7 @@
 
 Usage() {
     cat <<EOF
-    Usage: $0 [sell|buy|update|info|test|price|balance]
+    Usage: $Basename [sell|buy|update|info|test|price|balance]
         buy      = Buy Asset
         sell     = Sell Asset
         update   = Bot will buy/sell
@@ -153,7 +153,7 @@ SendMail() {
 
 
 Reset() {
-    cat << EOF > ~/.${0}.Previous
+    cat << EOF > ~/.${Basename}.Previous
 PreviousDate=""
 PreviousDirection=
 PreviousPrice=
@@ -168,12 +168,12 @@ EOF
 
 Init() {
     Trigger=0
-    if [ -f ~/.${0}.conf ]; then
-        Conf=~/.${0}.conf
+    if [ -f ~/.${Basename}.conf ]; then
+        Conf=~/.${Basename}.conf
         source $Conf
         source $PreviousValues
     else
-        echo "$HOME/.${0}.conf not found"
+        echo "$HOME/.${Basename}.conf not found"
         exit 1
     fi
     Time=$(date +%s%3N)
@@ -284,6 +284,7 @@ Main() {
 }
 
 
+Basename="$(basename $0)"
 case "$1" in
   buy)        Init
               Price="$(GetPrice)"
