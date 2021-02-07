@@ -42,6 +42,7 @@ EOF
 
 GetMACD() {
     JqResult=$(curl -s "https://api.taapi.io/macd?secret=${TaapiKey}&exchange=${Exchange}&symbol=${Asset}/${Quote}&interval=${Interval}" | jq .valueMACDHist)
+    JqResult=$(echo $JqResult | awk -F"E" 'BEGIN{OFMT="%10.10f"} {print $1 * (10 ^ $2)}')
     if [[ $JqResult == null ]]; then
         exit 1
     fi
@@ -215,6 +216,9 @@ GetBuySell() {
         if [[ $(echo "$MACD >= $Buy && $BuyTrigger >= $Trigger" | bc) -eq 1 ]]; then
             Side="buy"
             Trigger=$MACD
+            if [[ $(echo "$Trigger > $SellTrigger" | bc) -eq 1 ]]; then
+                Trigger=$SellTrigger
+            fi
             if [[ $PreviousSide != "buy" ]]; then
                 echo $Side
             fi
@@ -227,7 +231,9 @@ GetBuySell() {
         if [[ $(echo "$MACD <= $Sell && $SellTrigger <= $Trigger" | bc) -eq 1 ]]; then
             Side="sell"
             Trigger=$MACD
-            Side="sell"
+            if [[ $(echo "$Trigger < $BuyTrigger" | bc) -eq 1 ]]; then
+                Trigger=$BuyTrigger
+            fi
             if [[ $PreviousSide != "sell" ]]; then
                 echo $Side
             fi
